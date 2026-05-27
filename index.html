@@ -22,32 +22,32 @@
                 </div>
 
                 <div class="space-y-4">
-                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">Configuration</h3>
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">Setup (One Time)</h3>
                     
                     <div class="space-y-1">
-                        <label class="text-xs text-slate-400 px-2">Token Endpoint URL</label>
+                        <label class="text-xs text-slate-400 px-2">Your Vercel Token Endpoint URL</label>
                         <input type="text" id="tokenEndpoint" placeholder="https://your-project.vercel.app/api/token" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-                        <p class="text-xs text-slate-500 px-2 mt-1">Your Vercel endpoint that returns { token: "..." }</p>
+                        <p class="text-xs text-slate-500 px-2 mt-1">This endpoint has your AssemblyAI API key on Vercel</p>
                     </div>
 
                     <div class="space-y-1">
-                        <label class="text-xs text-slate-400 px-2">xAI (Grok) Key (Optional)</label>
+                        <label class="text-xs text-slate-400 px-2">xAI Grok Key (Optional)</label>
                         <input type="password" id="grokKey" placeholder="xai-..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
                     </div>
 
                     <div class="pt-4 border-t border-slate-800 space-y-3">
-                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">AI Prompts & Tone</h3>
+                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">Summary Style</h3>
                         <select id="summaryTemplate" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
                             <option value="executive">Executive Summary & Action Items</option>
-                            <option value="technical">Technical Architecture & Decisions</option>
-                            <option value="casual">Casual Conversation Clean-up</option>
+                            <option value="technical">Technical Decisions</option>
+                            <option value="casual">Conversation Notes</option>
                         </select>
                     </div>
                 </div>
             </div>
 
-            <div class="border-t border-slate-800 pt-4 px-2 text-xs text-slate-500 space-y-1">
-                <div class="flex items-center justify-between">
+            <div class="border-t border-slate-800 pt-4 px-2 text-xs text-slate-500">
+                <div class="flex justify-between">
                     <span>Status:</span>
                     <span id="wsStatus" class="text-rose-400">Disconnected</span>
                 </div>
@@ -56,21 +56,21 @@
 
         <main class="flex-1 flex flex-col h-full bg-slate-900">
             
-            <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur">
+            <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50">
                 <div class="flex items-center gap-4">
-                    <button id="recordBtn" class="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-medium px-4 py-2 rounded-full transition-all">
+                    <button id="recordBtn" class="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-medium px-4 py-2 rounded-full transition-all">
                         <i data-lucide="circle" class="w-4 h-4" id="recordIcon"></i>
                         <span id="recordText">Start Session</span>
                     </button>
                     <span id="timer" class="font-mono text-sm text-slate-400 hidden">00:00:00</span>
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <button id="downloadAudioBtn" disabled class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 px-3 py-2 rounded-lg text-sm font-medium">
+                <div class="flex gap-3">
+                    <button id="downloadAudioBtn" disabled class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 px-3 py-2 rounded-lg text-sm">
                         <i data-lucide="download" class="w-4 h-4"></i> Save Audio
                     </button>
-                    <button id="processAiBtn" disabled class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                        <i data-lucide="sparkles" class="w-4 h-4"></i> Run Grok Analysis
+                    <button id="processAiBtn" disabled class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 px-4 py-2 rounded-lg text-sm">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i> Run Analysis
                     </button>
                 </div>
             </header>
@@ -82,7 +82,7 @@
                         <span class="text-xs font-semibold uppercase text-slate-400">Live Transcript</span>
                     </div>
                     <div id="transcriptBody" class="flex-1 p-4 overflow-y-auto space-y-4 text-slate-300">
-                        <p class="text-slate-500 italic text-sm">Click Start Session, speak, and your transcript will appear here...</p>
+                        <p class="text-slate-500 italic text-sm">Click Start Session, speak, and transcript appears here...</p>
                     </div>
                 </div>
 
@@ -103,7 +103,6 @@
     </div>
 
     <script>
-        // DOM Elements
         const recordBtn = document.getElementById('recordBtn');
         const recordIcon = document.getElementById('recordIcon');
         const recordText = document.getElementById('recordText');
@@ -117,7 +116,6 @@
         const grokKeyInput = document.getElementById('grokKey');
         const summaryTemplate = document.getElementById('summaryTemplate');
 
-        // State
         let isRecording = false;
         let rtcRecorder = null;
         let stream = null;
@@ -168,7 +166,7 @@
             const tokenEndpoint = tokenEndpointInput.value.trim();
             
             if (!tokenEndpoint) {
-                alert("Please enter your Vercel token endpoint URL in the sidebar.");
+                alert("Please enter your Vercel token endpoint URL.");
                 return;
             }
 
@@ -176,27 +174,15 @@
                 wsStatus.textContent = "Getting token...";
                 wsStatus.className = "text-amber-400";
 
-                // Get temporary token from your Vercel endpoint
-                const response = await fetch(tokenEndpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Token endpoint returned ${response.status}`);
-                }
-
+                const response = await fetch(tokenEndpoint, { method: 'POST' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
-                if (!data.token) {
-                    throw new Error('No token returned');
-                }
+                if (!data.token) throw new Error('No token returned');
 
                 wsStatus.textContent = "Connecting...";
                 
-                // Get microphone
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
-                // Setup recording backup
                 rtcRecorder = new RecordRTC(stream, {
                     type: 'audio',
                     mimeType: 'audio/webm',
@@ -206,16 +192,13 @@
                 });
                 rtcRecorder.startRecording();
 
-                // Connect WebSocket with token
-                const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${data.token}`;
-                socket = new WebSocket(wsUrl);
+                socket = new WebSocket(`wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${data.token}`);
 
                 socket.onopen = () => {
                     wsStatus.textContent = "Connected";
                     wsStatus.className = "text-emerald-400";
                     transcriptBody.innerHTML = "";
                     fullTranscriptText = "";
-                    
                     socket.send(JSON.stringify({
                         session_termination_threshold: 700,
                         disable_partial_transcripts: false,
@@ -223,22 +206,22 @@
                     }));
                 };
 
-                socket.onmessage = (message) => {
-                    const data = JSON.parse(message.data);
+                socket.onmessage = (msg) => {
+                    const data = JSON.parse(msg.data);
                     
                     if (data.message_type === "PartialTranscript") {
                         document.querySelectorAll('.partial-text').forEach(p => p.remove());
-                        if (data.text && data.text.trim()) {
-                            const partialBlock = document.createElement('p');
-                            partialBlock.className = "text-slate-500 italic partial-text pl-3 my-2 border-l-2 border-slate-600";
-                            partialBlock.textContent = data.text;
-                            transcriptBody.appendChild(partialBlock);
+                        if (data.text?.trim()) {
+                            const p = document.createElement('p');
+                            p.className = "text-slate-500 italic partial-text pl-3 my-2 border-l-2 border-slate-600";
+                            p.textContent = data.text;
+                            transcriptBody.appendChild(p);
                             transcriptBody.scrollTop = transcriptBody.scrollHeight;
                         }
                     }
                     else if (data.message_type === "FinalTranscript") {
                         document.querySelectorAll('.partial-text').forEach(p => p.remove());
-                        if (data.text && data.text.trim()) {
+                        if (data.text?.trim()) {
                             fullTranscriptText += (fullTranscriptText ? " " : "") + data.text;
                             const block = document.createElement('p');
                             block.className = "text-slate-200 border-l-2 border-indigo-500 pl-3 my-2";
@@ -247,35 +230,19 @@
                             transcriptBody.scrollTop = transcriptBody.scrollHeight;
                         }
                     }
-                    else if (data.message_type === "Error") {
-                        wsStatus.textContent = `Error`;
-                        console.error("Error:", data.error);
-                    }
                 };
 
-                socket.onerror = () => {
-                    wsStatus.textContent = "Error";
-                    wsStatus.className = "text-rose-500";
-                };
-                
-                socket.onclose = () => {
-                    wsStatus.textContent = "Disconnected";
-                    wsStatus.className = "text-rose-400";
-                    if (isRecording) stopSession();
-                };
+                socket.onerror = () => { wsStatus.textContent = "Error"; wsStatus.className = "text-rose-500"; };
+                socket.onclose = () => { wsStatus.textContent = "Disconnected"; wsStatus.className = "text-rose-400"; if (isRecording) stopSession(); };
 
-                // Audio processing
                 audioContext = new AudioContext({ sampleRate: 16000 });
                 const source = audioContext.createMediaStreamSource(stream);
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
-
                 processor.onaudioprocess = (e) => {
-                    if (socket && socket.readyState === WebSocket.OPEN) {
-                        const pcm = float32ToInt16PCM(e.inputBuffer.getChannelData(0));
-                        socket.send(pcm.buffer);
+                    if (socket?.readyState === WebSocket.OPEN) {
+                        socket.send(float32ToInt16PCM(e.inputBuffer.getChannelData(0)).buffer);
                     }
                 };
-
                 source.connect(processor);
                 processor.connect(audioContext.destination);
                 audioContext.resume();
@@ -292,25 +259,21 @@
             } catch (err) {
                 alert(`Error: ${err.message}`);
                 wsStatus.textContent = "Disconnected";
-                console.error(err);
             }
         }
 
         async function stopSession() {
             stopTimer();
-            
             if (processor) processor.disconnect();
             if (audioContext) await audioContext.close();
-            if (socket && socket.readyState === WebSocket.OPEN) socket.close();
-            if (stream) stream.getTracks().forEach(track => track.stop());
-
+            if (socket?.readyState === WebSocket.OPEN) socket.close();
+            if (stream) stream.getTracks().forEach(t => t.stop());
             if (rtcRecorder) {
                 rtcRecorder.stopRecording(() => {
                     audioBlob = rtcRecorder.getBlob();
                     downloadAudioBtn.disabled = false;
                 });
             }
-
             isRecording = false;
             recordBtn.classList.replace('bg-amber-600', 'bg-rose-600');
             recordIcon.setAttribute('data-lucide', 'circle');
@@ -319,17 +282,13 @@
             lucide.createIcons();
         }
 
-        recordBtn.onclick = () => {
-            if (isRecording) stopSession();
-            else startSession();
-        };
-
+        recordBtn.onclick = () => isRecording ? stopSession() : startSession();
         downloadAudioBtn.onclick = () => {
             if (audioBlob) {
                 const url = URL.createObjectURL(audioBlob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `meeting-audio-${Date.now()}.webm`;
+                a.download = `meeting-${Date.now()}.webm`;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 100);
             }
@@ -337,45 +296,30 @@
 
         processAiBtn.onclick = async () => {
             const grokKey = grokKeyInput.value.trim();
-            
-            if (!grokKey) {
-                alert("Please add your xAI (Grok) API key.");
-                return;
-            }
-            if (!fullTranscriptText.trim()) {
-                alert("No transcript available. Record first.");
-                return;
-            }
+            if (!grokKey) { alert("Add Grok API key"); return; }
+            if (!fullTranscriptText.trim()) { alert("No transcript"); return; }
 
             const template = summaryTemplate.value;
-            let systemPrompt = "You are an expert meeting analyst. Format outputs in clean Markdown.";
-            if (template === 'executive') systemPrompt += " Create an executive summary and action items.";
-            else if (template === 'technical') systemPrompt += " Focus on technical decisions and architecture.";
+            let systemPrompt = "Format in clean Markdown.";
+            if (template === 'executive') systemPrompt = "Executive summary + action items.";
+            else if (template === 'technical') systemPrompt = "Technical decisions & architecture.";
             
-            aiBody.innerHTML = '<div class="text-slate-400 animate-pulse">Analyzing transcript...</div>';
+            aiBody.innerHTML = '<div class="text-slate-400 animate-pulse">Analyzing...</div>';
             
             try {
-                const response = await fetch('https://api.x.ai/v1/chat/completions', {
+                const res = await fetch('https://api.x.ai/v1/chat/completions', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${grokKey}`,
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Authorization': `Bearer ${grokKey}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: 'grok-beta',
                         messages: [
                             { role: 'system', content: systemPrompt },
-                            { role: 'user', content: `Analyze this transcript:\n\n${fullTranscriptText}` }
-                        ],
-                        temperature: 0.3
+                            { role: 'user', content: `Transcript:\n\n${fullTranscriptText}` }
+                        ]
                     })
                 });
-                const data = await response.json();
-                if (data.choices && data.choices[0]) {
-                    aiBody.innerHTML = `<div class="text-slate-200 whitespace-pre-wrap">${data.choices[0].message.content}</div>`;
-                } else {
-                    aiBody.innerHTML = '<p class="text-rose-400">Failed to parse response.</p>';
-                }
+                const data = await res.json();
+                aiBody.innerHTML = `<div class="text-slate-200 whitespace-pre-wrap">${data.choices?.[0]?.message?.content || 'No response'}</div>`;
             } catch (err) {
                 aiBody.innerHTML = `<p class="text-rose-400">Error: ${err.message}</p>`;
             }
