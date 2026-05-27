@@ -115,6 +115,7 @@
         let timerInterval = null;
         let secondsElapsed = 0;
 
+        // Load saved Grok key
         if(localStorage.getItem('grok_key')) grokKeyInput.value = localStorage.getItem('grok_key');
         grokKeyInput.addEventListener('input', (e) => localStorage.setItem('grok_key', e.target.value));
 
@@ -151,11 +152,16 @@
                 wsStatus.textContent = "Getting token...";
                 wsStatus.className = "text-amber-400";
 
-                // Get token from your own Vercel endpoint
-                const res = await fetch('/api/token', { method: 'POST' });
+                // GET request to match your ALS token.js (not POST)
+                const res = await fetch('/api/token');
                 const data = await res.json();
                 
-                if (!data.token) throw new Error('No token received');
+                if (!data.token) {
+                    console.error('Token response:', data);
+                    throw new Error(data.error || data.message || 'No token received');
+                }
+
+                console.log('Token obtained:', data.token.substring(0, 20) + '...');
 
                 wsStatus.textContent = "Connecting...";
 
@@ -167,13 +173,19 @@
                     wsStatus.className = "text-emerald-400";
                     transcriptBody.innerHTML = "";
                     fullTranscriptText = "";
-                    socket.send(JSON.stringify({ session_termination_threshold: 700, disable_partial_transcripts: false, language_code: "en_us" }));
+                    socket.send(JSON.stringify({ 
+                        session_termination_threshold: 700, 
+                        disable_partial_transcripts: false, 
+                        language_code: "en_us" 
+                    }));
                     startMicrophone();
                 };
 
                 socket.onmessage = (msg) => {
                     const data = JSON.parse(msg.data);
+                    
                     if (data.message_type === "PartialTranscript") {
+                        // Remove previous partial
                         document.querySelectorAll('.partial-text').forEach(p => p.remove());
                         if (data.text?.trim()) {
                             const p = document.createElement('p');
@@ -182,7 +194,8 @@
                             transcriptBody.appendChild(p);
                             transcriptBody.scrollTop = transcriptBody.scrollHeight;
                         }
-                    } else if (data.message_type === "FinalTranscript") {
+                    } 
+                    else if (data.message_type === "FinalTranscript") {
                         document.querySelectorAll('.partial-text').forEach(p => p.remove());
                         if (data.text?.trim()) {
                             fullTranscriptText += (fullTranscriptText ? " " : "") + data.text;
@@ -193,28 +206,61 @@
                             transcriptBody.scrollTop = transcriptBody.scrollHeight;
                         }
                     }
+                    else if (data.message_type === "SessionBegins") {
+                        console.log("Session began:", data.session_id);
+                    }
+                    else if (data.message_type === "Error") {
+                        console.error("AssemblyAI error:", data);
+                        wsStatus.textContent = "Error";
+                        wsStatus.className = "text-rose-500";
+                    }
                 };
 
-                socket.onerror = () => { wsStatus.textContent = "Error"; wsStatus.className = "text-rose-500"; };
-                socket.onclose = () => { wsStatus.textContent = "Disconnected"; if (isRecording) stopSession(); };
+                socket.onerror = (err) => {
+                    console.error("WebSocket error:", err);
+                    wsStatus.textContent = "Error";
+                    wsStatus.className = "text-rose-500";
+                };
+                
+                socket.onclose = (event) => {
+                    console.log("WebSocket closed:", event.code, event.reason);
+                    wsStatus.textContent = "Disconnected";
+                    wsStatus.className = "text-rose-400";
+                    if (isRecording) stopSession();
+                };
 
-            } catch (err) { alert(`Error: ${err.message}`); }
+            } catch (err) {
+                console.error("Start session error:", err);
+                alert(`Error: ${err.message}`);
+                wsStatus.textContent = "Error";
+                wsStatus.className = "text-rose-500";
+            }
         }
 
         async function startMicrophone() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                rtcRecorder = new RecordRTC(stream, { type: 'audio', mimeType: 'audio/webm', recorderType: RecordRTC.StereoAudioRecorder, numberOfAudioChannels: 1, desiredSampRate: 16000 });
+                
+                rtcRecorder = new RecordRTC(stream, { 
+                    type: 'audio', 
+                    mimeType: 'audio/webm', 
+                    recorderType: RecordRTC.StereoAudioRecorder, 
+                    numberOfAudioChannels: 1, 
+                    desiredSampRate: 16000 
+                });
                 rtcRecorder.startRecording();
 
                 audioContext = new AudioContext({ sampleRate: 16000 });
                 const source = audioContext.createMediaStreamSource(stream);
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
+                
                 processor.onaudioprocess = (e) => {
-                    if (socket?.readyState === WebSocket.OPEN) {
-                        socket.send(float32ToInt16PCM(e.inputBuffer.getChannelData(0)).buffer);
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        const pcm = float32ToInt16PCM(e.inputBuffer.getChannelData(0));
+                        socket.send(pcm.buffer);
                     }
                 };
+                
                 source.connect(processor);
                 processor.connect(audioContext.destination);
                 audioContext.resume();
@@ -228,21 +274,37 @@
                 lucide.createIcons();
                 startTimer();
 
-            } catch (err) { alert(`Microphone error: ${err.message}`); }
+            } catch (err) {
+                console.error("Microphone error:", err);
+                alert(`Microphone error: ${err.message}`);
+            }
         }
 
         async function stopSession() {
             stopTimer();
-            if (processor) processor.disconnect();
-            if (audioContext) await audioContext.close();
-            if (socket?.readyState === WebSocket.OPEN) socket.close();
-            if (stream) stream.getTracks().forEach(t => t.stop());
+            
+            if (processor) {
+                processor.disconnect();
+                processor = null;
+            }
+            if (audioContext) {
+                await audioContext.close();
+                audioContext = null;
+            }
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close();
+            }
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
             if (rtcRecorder) {
                 rtcRecorder.stopRecording(() => {
                     audioBlob = rtcRecorder.getBlob();
                     downloadAudioBtn.disabled = false;
                 });
             }
+
             isRecording = false;
             recordBtn.classList.replace('bg-amber-600', 'bg-rose-600');
             recordIcon.setAttribute('data-lucide', 'circle');
@@ -251,7 +313,14 @@
             lucide.createIcons();
         }
 
-        recordBtn.onclick = () => isRecording ? stopSession() : startSession();
+        recordBtn.onclick = () => {
+            if (isRecording) {
+                stopSession();
+            } else {
+                startSession();
+            }
+        };
+
         downloadAudioBtn.onclick = () => {
             if (audioBlob) {
                 const url = URL.createObjectURL(audioBlob);
@@ -262,26 +331,67 @@
                 setTimeout(() => URL.revokeObjectURL(url), 100);
             }
         };
+
         processAiBtn.onclick = async () => {
             const grokKey = grokKeyInput.value.trim();
-            if (!grokKey) { alert("Add Grok API key"); return; }
-            if (!fullTranscriptText.trim()) { alert("No transcript"); return; }
+            
+            if (!grokKey) {
+                alert("Please add your Grok API key");
+                return;
+            }
+            if (!fullTranscriptText.trim()) {
+                alert("No transcript available. Record a meeting first.");
+                return;
+            }
 
             const template = summaryTemplate.value;
-            let systemPrompt = "Format in clean Markdown.";
-            if (template === 'executive') systemPrompt = "Executive summary + action items.";
-            else if (template === 'technical') systemPrompt = "Technical decisions.";
+            let systemPrompt = "Format your response in clean, readable Markdown.";
+            
+            if (template === 'executive') {
+                systemPrompt = "Create an executive summary followed by bullet-point action items with suggested owners.";
+            } else if (template === 'technical') {
+                systemPrompt = "Focus on technical decisions, architecture discussions, bugs found, and next steps.";
+            } else {
+                systemPrompt = "Convert this conversation into professional, structured meeting notes.";
+            }
 
-            aiBody.innerHTML = '<div class="text-slate-400 animate-pulse">Analyzing...</div>';
+            aiBody.innerHTML = '<div class="text-slate-400 animate-pulse">🧠 Grok is analyzing your meeting...</div>';
+            
             try {
                 const res = await fetch('https://api.x.ai/v1/chat/completions', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${grokKey}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: 'grok-beta', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Transcript:\n\n${fullTranscriptText}` }] })
+                    headers: { 
+                        'Authorization': `Bearer ${grokKey}`, 
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify({ 
+                        model: 'grok-beta', 
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `Please analyze this meeting transcript and provide structured notes:\n\n${fullTranscriptText}` }
+                        ],
+                        temperature: 0.3
+                    })
                 });
+                
                 const data = await res.json();
-                aiBody.innerHTML = `<div class="text-slate-200 whitespace-pre-wrap">${data.choices?.[0]?.message?.content || 'No response'}</div>`;
-            } catch (err) { aiBody.innerHTML = `<p class="text-rose-400">Error: ${err.message}</p>`; }
+                
+                if (data.choices && data.choices[0] && data.choices[0].message) {
+                    let content = data.choices[0].message.content;
+                    // Simple markdown formatting
+                    content = content.replace(/^### (.*$)/gm, '<h4 class="text-base font-bold text-white mt-4 mb-2">$1</h4>');
+                    content = content.replace(/^## (.*$)/gm, '<h3 class="text-lg font-bold text-indigo-400 mt-5 mb-2">$1</h3>');
+                    content = content.replace(/^# (.*$)/gm, '<h2 class="text-xl font-black text-indigo-300 mt-6 mb-3">$1</h2>');
+                    content = content.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
+                    content = content.replace(/\n/g, '<br>');
+                    aiBody.innerHTML = `<div class="text-slate-200">${content}</div>`;
+                } else {
+                    aiBody.innerHTML = `<p class="text-rose-400">Error: ${data.error || 'Failed to parse response'}</p>`;
+                }
+            } catch (err) {
+                console.error("Grok error:", err);
+                aiBody.innerHTML = `<p class="text-rose-400">Error: ${err.message}</p>`;
+            }
         };
     </script>
 </body>
