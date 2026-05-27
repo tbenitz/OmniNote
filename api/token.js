@@ -1,5 +1,6 @@
 // api/token.js
 export default async function handler(req, res) {
+  // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   
   if (req.method === 'OPTIONS') {
@@ -16,11 +17,10 @@ export default async function handler(req, res) {
     const apiKey = process.env.ASSEMBLYAI_API_KEY;
     
     if (!apiKey) {
-      console.error('ASSEMBLYAI_API_KEY not set in environment');
-      return res.status(500).json({ error: 'API key not configured on server' });
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
-    // Must get a real token from AssemblyAI - API key directly won't work for WebSocket
+    // Call AssemblyAI to get a temporary token
     const response = await fetch('https://api.assemblyai.com/v2/realtime/token', {
       method: 'POST',
       headers: {
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    console.log('Token obtained successfully, expires in 1800 seconds');
+    console.log('Token obtained successfully');
     return res.status(200).json({ token: data.token });
 
   } catch (error) {
