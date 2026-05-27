@@ -194,9 +194,35 @@
                 });
                 rtcRecorder.startRecording();
 
-                // 2. Authenticate directly via URL parameters to bypass GitHub Pages CORS restrictions
-                const encodedKey = encodeURIComponent(apiKey);
-                socket = new WebSocket(`wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&auth_token=${encodedKey}`);
+                wsStatus.textContent = "Authenticating...";
+                wsStatus.className = "text-amber-400";
+
+                // 2. Fetch an Ephemeral Token using an open CORS proxy to safely make server-to-server calls from GitHub Pages
+                const proxyUrl = "https://api.allorigins.win/get?url=";
+                const targetUrl = encodeURIComponent("https://api.assemblyai.com/v2/realtime/token");
+                
+                const response = await fetch(`${proxyUrl}${targetUrl}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        headers: {
+                            "Authorization": apiKey,
+                            "Content-Type": "application/json"
+                        },
+                        method: "POST",
+                        body: JSON.stringify({ expires_in: 3600 })
+                    })
+                });
+
+                const proxyData = await response.json();
+                const tokenData = JSON.parse(proxyData.contents);
+
+                if (!tokenData.token) {
+                    throw new Error(tokenData.error || "Could not retrieve temporary secure session token.");
+                }
+
+                // 3. Connect to AssemblyAI WebSocket using the secure temporary token
+                socket = new WebSocket(`wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${tokenData.token}`);
 
                 socket.onopen = () => {
                     wsStatus.textContent = "Connected";
@@ -245,7 +271,7 @@
                     transcriptBody.scrollTop = transcriptBody.scrollHeight;
                 };
 
-                // 3. Hook Browser Audio Processing Graph
+                // 4. Hook Browser Audio Processing Graph
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 const source = audioContext.createMediaStreamSource(stream);
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
@@ -277,7 +303,9 @@
                 startTimer();
 
             } catch (err) {
-                alert(`Error capturing hardware audio: ${err.message}`);
+                alert(`Authentication or Recording Error: ${err.message}`);
+                wsStatus.textContent = "Disconnected";
+                wsStatus.className = "text-rose-400";
                 console.error(err);
             }
         }
@@ -288,17 +316,19 @@
             // Clean up live processing graph
             if (processor) processor.disconnect();
             if (audioContext) audioContext.close();
-            if (socket) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({ terminate_session: true }));
                 socket.close();
             }
             if (stream) stream.getTracks().forEach(track => track.stop());
 
             // Compile localized backup storage audio compressed payload
-            rtcRecorder.stopRecording(() => {
-                audioBlob = rtcRecorder.getBlob();
-                downloadAudioBtn.disabled = false;
-            });
+            if (rtcRecorder) {
+                rtcRecorder.stopRecording(() => {
+                    audioBlob = rtcRecorder.getBlob();
+                    downloadAudioBtn.disabled = false;
+                });
+            }
 
             // Toggle active components for Post Processing Workspace
             isRecording = false;
