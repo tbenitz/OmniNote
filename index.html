@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniNote AI - Meeting Suite</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/RecordRTC/5.6.2/RecordRTC.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <div class="flex h-screen overflow-hidden">
+        
+        <aside class="w-80 bg-slate-950 border-r border-slate-800 flex flex-col justify-between p-4">
+            <div>
+                <div class="flex items-center gap-3 mb-8 px-2">
+                    <div class="p-2 bg-indigo-600 rounded-lg text-white">
+                        <i data-lucide="mic"></i>
+                    </div>
+                    <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">OmniNote AI</span>
+                </div>
+
+                <div class="space-y-4">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">API Configuration</h3>
+                    
+                    <div class="space-y-1">
+                        <label class="text-xs text-slate-400 px-2">AssemblyAI Key</label>
+                        <input type="password" id="assemblyKey" placeholder="assembly_..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-xs text-slate-400 px-2">xAI (Grok) Key</label>
+                        <input type="password" id="grokKey" placeholder="xai-..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-800 space-y-3">
+                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">AI Prompts & Tone</h3>
+                        <select id="summaryTemplate" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                            <option value="executive">Executive Summary & Action Items</option>
+                            <option value="technical">Technical Architecture & Decisions</option>
+                            <option value="casual">Casual Conversation Clean-up</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border-t border-slate-800 pt-4 px-2 text-xs text-slate-500 space-y-1">
+                <div class="flex items-center justify-between">
+                    <span>Audio Engine:</span>
+                    <span class="text-emerald-400">48kbps MP3</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span>WebSocket:</span>
+                    <span id="wsStatus" class="text-rose-400">Disconnected</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col h-full bg-slate-900">
+            
+            <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur">
+                <div class="flex items-center gap-4">
+                    <button id="recordBtn" class="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-medium px-4 py-2 rounded-full transition-all shadow-lg shadow-rose-900/20">
+                        <i data-lucide="circle" class="w-4 h-4 fill-white animate-pulse" id="recordIcon"></i>
+                        <span id="recordText">Start Session</span>
+                    </button>
+                    <span id="timer" class="font-mono text-sm text-slate-400 hidden">00:00:00</span>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button id="downloadAudioBtn" disabled class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-3 py-2 rounded-lg text-sm font-medium border border-slate-700 transition">
+                        <i data-lucide="download" class="w-4 h-4"></i> Save Audio (MP3)
+                    </button>
+                    <button id="processAiBtn" disabled class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-lg shadow-indigo-900/20">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i> Run Grok Analysis
+                    </button>
+                </div>
+            </header>
+
+            <div class="flex-1 flex overflow-hidden p-6 gap-6">
+                
+                <div class="flex-1 bg-slate-950 rounded-xl border border-slate-800 flex flex-col overflow-hidden shadow-inner">
+                    <div class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+                        <span class="text-xs font-semibold tracking-wider uppercase text-slate-400">Real-Time Transcript</span>
+                        <span id="liveIndicator" class="text-xs text-indigo-400 hidden flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span> Live Streaming
+                        </span>
+                    </div>
+                    <div id="transcriptBody" class="flex-1 p-4 overflow-y-auto space-y-4 text-slate-300 leading-relaxed scrollbar-thin">
+                        <p class="text-slate-500 italic text-sm">Your live-streamed meeting transcript from AssemblyAI will display here in real-time...</p>
+                    </div>
+                </div>
+
+                <div class="w-[450px] bg-slate-950 rounded-xl border border-slate-800 flex flex-col overflow-hidden shadow-inner">
+                    <div class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+                        <span class="text-xs font-semibold tracking-wider uppercase text-slate-400">Grok AI Workspace</span>
+                        <div id="aiLoading" class="hidden"><i data-lucide="loader-2" class="w-4 h-4 animate-spin text-indigo-400"></i></div>
+                    </div>
+                    <div id="aiBody" class="flex-1 p-4 overflow-y-auto text-slate-300 space-y-4 text-sm leading-relaxed">
+                        <div class="text-center py-12 text-slate-500">
+                            <i data-lucide="brain-circuit" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
+                            <p>End your recording session and click <strong class="text-slate-400">Run Grok Analysis</strong> to extract intelligence.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // DOM Elements
+        const recordBtn = document.getElementById('recordBtn');
+        const recordIcon = document.getElementById('recordIcon');
+        const recordText = document.getElementById('recordText');
+        const timer = document.getElementById('timer');
+        const wsStatus = document.getElementById('wsStatus');
+        const liveIndicator = document.getElementById('liveIndicator');
+        const transcriptBody = document.getElementById('transcriptBody');
+        const aiBody = document.getElementById('aiBody');
+        const downloadAudioBtn = document.getElementById('downloadAudioBtn');
+        const processAiBtn = document.getElementById('processAiBtn');
+        const aiLoading = document.getElementById('aiLoading');
+
+        // State variables
+        let isRecording = false;
+        let rtcRecorder = null;
+        let stream = null;
+        let socket = null;
+        let audioContext = null;
+        let processor = null;
+        let fullTranscriptText = "";
+        let audioBlob = null;
+        let timerInterval = null;
+        let secondsElapsed = 0;
+
+        // Initialize Icons
+        lucide.createIcons();
+
+        // Load cached API keys if they exist
+        if(localStorage.getItem('aai_key')) document.getElementById('assemblyKey').value = localStorage.getItem('aai_key');
+        if(localStorage.getItem('grok_key')) document.getElementById('grokKey').value = localStorage.getItem('grok_key');
+
+        // Save keys dynamically
+        document.getElementById('assemblyKey').addEventListener('input', (e) => localStorage.setItem('aai_key', e.target.value));
+        document.getElementById('grokKey').addEventListener('input', (e) => localStorage.setItem('grok_key', e.target.value));
+
+        // Timer control
+        function startTimer() {
+            secondsElapsed = 0;
+            timer.classList.remove('hidden');
+            timerInterval = setInterval(() => {
+                secondsElapsed++;
+                const hrs = String(Math.floor(secondsElapsed / 3600)).padStart(2, '0');
+                const mins = String(Math.floor((secondsElapsed % 3600) / 60)).padStart(2, '0');
+                const secs = String(secondsElapsed % 60).padStart(2, '0');
+                timer.textContent = `${hrs}:${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            timer.classList.add('hidden');
+        }
+
+        // Handle Master Record Button
+        recordBtn.addEventListener('click', async () => {
+            const aaiKey = document.getElementById('assemblyKey').value.trim();
+            if (!aaiKey) {
+                alert("Please add an AssemblyAI API Key in the sidebar.");
+                return;
+            }
+
+            if (!isRecording) {
+                await startSession(aaiKey);
+            } else {
+                await stopSession();
+            }
+        });
+
+        async function startSession(apiKey) {
+            try {
+                // Request Mic permissions
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // 1. Setup Audio Recording for local backup (48kbps MP3 equivalent optimization)
+                // Using standard RecordRTC configuration tailored for optimized bitrate size
+                rtcRecorder = new RecordRTC(stream, {
+                    type: 'audio',
+                    mimeType: 'audio/webm;codecs=opus', // Standard lightweight web container
+                    recorderType: RecordRTC.StereoAudioRecorder,
+                    numberOfAudioChannels: 1, 
+                    desiredSampRate: 16000 // Best for speech to text & smaller files
+                });
+                rtcRecorder.startRecording();
+
+                // 2. Fetch Ephemeral Token from AssemblyAI to securely initialize client WebSockets
+                const response = await fetch('https://api.assemblyai.com/v2/realtime/token', {
+                    method: 'POST',
+                    headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expires_in: 3600 })
+                });
+                const tokenData = await response.json();
+                
+                if(!tokenData.token) throw new Error("Could not authenticate with AssemblyAI.");
+
+                // 3. Initialize WebSocket AssemblyAI Pipeline
+                socket = new WebSocket(`wss://api.assemblyai.com/v2/realtime/ws?token=${tokenData.token}&sample_rate=16000`);
+
+                socket.onopen = () => {
+                    wsStatus.textContent = "Connected";
+                    wsStatus.className = "text-emerald-400";
+                    liveIndicator.classList.remove('hidden');
+                    transcriptBody.innerHTML = ""; // Clear placeholder text
+                    fullTranscriptText = "";
+                };
+
+                socket.onerror = (err) => console.error("WebSocket Error:", err);
+                
+                socket.onclose = () => {
+                    wsStatus.textContent = "Disconnected";
+                    wsStatus.className = "text-rose-400";
+                    liveIndicator.classList.add('hidden');
+                };
+
+                // Handle incoming real-time chunks from AssemblyAI
+                socket.onmessage = (message) => {
+                    const data = JSON.parse(message.data);
+                    if (!data.text) return;
+
+                    // Remove existing temporary elements during dictation typing
+                    const partials = document.querySelectorAll('.partial-text');
+                    partials.forEach(p => p.remove());
+
+                    if (data.message_type === 'FinalTranscript') {
+                        fullTranscriptText += data.text + " ";
+                        const block = document.createElement('p');
+                        block.className = "text-slate-200 border-l-2 border-indigo-500 pl-3 my-2";
+                        block.textContent = data.text;
+                        transcriptBody.appendChild(block);
+                    } else if (data.message_type === 'PartialTranscript') {
+                        const partialBlock = document.createElement('p');
+                        partialBlock.className = "text-slate-500 italic partial-text pl-3 my-2";
+                        partialBlock.textContent = data.text;
+                        transcriptBody.appendChild(partialBlock);
+                    }
+                    transcriptBody.scrollTop = transcriptBody.scrollHeight;
+                };
+
+                // 4. Hook Browser Audio Processing Graph to feed WebSocket pipeline
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                const source = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+                processor.onaudioprocess = (e) => {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        // Convert audio data to 16-bit PCM expected by AssemblyAI
+                        const pcmBlock = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            let s = Math.max(-1, Math.min(1, inputData[i]));
+                            pcmBlock[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        }
+                        socket.send(JSON.stringify({ audio_data: btoa(String.fromCharCode(...new Uint8Array(pcmBlock.buffer))) }));
+                    }
+                };
+
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                // UI Mutation
+                isRecording = true;
+                recordBtn.classList.replace('bg-rose-600', 'bg-amber-600');
+                recordBtn.classList.replace('hover:bg-rose-500', 'hover:bg-amber-500');
+                recordIcon.setAttribute('data-lucide', 'square');
+                recordText.textContent = "Stop Session";
+                downloadAudioBtn.disabled = true;
+                processAiBtn.disabled = true;
+                lucide.createIcons();
+                startTimer();
+
+            } catch (err) {
+                alert(`Error capturing hardware audio: ${err.message}`);
+                console.error(err);
+            }
+        }
+
+        async function stopSession() {
+            stopTimer();
+            
+            // Clean up live processing graph
+            if (processor) processor.disconnect();
+            if (audioContext) audioContext.close();
+            if (socket) {
+                socket.send(JSON.stringify({ terminate_session: true }));
+                socket.close();
+            }
+            if (stream) stream.getTracks().forEach(track => track.stop());
+
+            // Compile localized backup storage audio compressed payload
+            rtcRecorder.stopRecording(() => {
+                audioBlob = rtcRecorder.getBlob();
+                downloadAudioBtn.disabled = false;
+            });
+
+            // Toggle active components for Post Processing Workspace
+            isRecording = false;
+            recordBtn.classList.replace('bg-amber-600', 'bg-rose-600');
+            recordBtn.classList.replace('hover:bg-amber-500', 'hover:bg-rose-500');
+            recordIcon.setAttribute('data-lucide', 'circle');
+            recordText.textContent = "Start Session";
+            processAiBtn.disabled = false;
+            lucide.createIcons();
+        }
+
+        // Export local optimized backup Audio track
+        downloadAudioBtn.addEventListener('click', () => {
+            if (!audioBlob) return;
+            const url = URL.createObjectURL(audioBlob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `meeting-audio-${Date.now()}.mp3`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        });
+
+        // Trigger intelligence payload ingestion with xAI Grok API
+        processAiBtn.addEventListener('click', async () => {
+            const grokKey = document.getElementById('grokKey').value.trim();
+            const template = document.getElementById('summaryTemplate').value;
+
+            if (!grokKey) {
+                alert("Please add an xAI (Grok) API Key in the sidebar.");
+                return;
+            }
+
+            if (!fullTranscriptText.trim()) {
+                alert("No transcript text compiled yet to structure notes.");
+                return;
+            }
+
+            aiLoading.classList.remove('hidden');
+            aiBody.innerHTML = `<div class="text-slate-400 italic animate-pulse">Grok is constructing structured documentation and extracting core key tasks...</div>`;
+
+            let systemPrompt = "You are an elite enterprise AI note-taking compiler. Format all outputs beautifully using structural clean Markdown.";
+            if (template === 'executive') {
+                systemPrompt += " Generate a high-level executive summary followed by a clear, action-item list highlighting who owns what task.";
+            } else if (template === 'technical') {
+                systemPrompt += " Focus deeply on technical decisions made, codebase/architectural alterations discussed, bugs discovered, and future sprint plans.";
+            } else {
+                systemPrompt += " Convert informal conversational dialogue into highly professional, clean, structured team knowledge base logs.";
+            }
+
+            try {
+                const response = await fetch('https://api.x.ai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${grokKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'grok-beta', // xAI's current standard endpoint model target
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `Please transform the following unstructured live transcript into a clean document:\n\n${fullTranscriptText}` }
+                        ],
+                        temperature: 0.3
+                    })
+                });
+
+                const data = await response.json();
+                aiLoading.classList.add('hidden');
+
+                if (data.choices && data.choices[0].message) {
+                    // Simple Markdown-to-HTML formatter trick for UI rendering
+                    let markdownResult = data.choices[0].message.content;
+                    aiBody.innerHTML = `<div class="prose prose-invert max-w-none text-slate-200">${formatMarkdown(markdownResult)}</div>`;
+                } else {
+                    aiBody.innerHTML = `<p class="text-rose-400">Failed parsing content payload response from xAI.</p>`;
+                }
+            } catch (err) {
+                aiLoading.classList.add('hidden');
+                aiBody.innerHTML = `<p class="text-rose-400">Error connecting to xAI: ${err.message}</p>`;
+            }
+        });
+
+        // Helper regex parser to format raw markdown snippets returned from Grok
+        function formatMarkdown(text) {
+            return text
+                .replace(/^### (.*$)/gim, '<h4 class="text-base font-bold text-white mt-4 mb-2">$1</h4>')
+                .replace(/^## (.*$)/gim, '<h3 class="text-lg font-bold text-indigo-400 mt-5 mb-2">$1</h3>')
+                .replace(/^# (.*$)/gim, '<h2 class="text-xl font-black text-indigo-300 mt-6 mb-3">$1</h2>')
+                .replace(/^\s*\n\* (.*$)/gim, '<ul class="list-disc pl-5 my-2"><li>$1</li></ul>')
+                .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc text-slate-300">$1</li>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+                .replace(/\n/g, '<br>');
+        }
+    </script>
+</body>
+</html>
