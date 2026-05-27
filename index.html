@@ -22,22 +22,13 @@
                 </div>
 
                 <div class="space-y-4">
-                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">Setup (One Time)</h3>
-                    
-                    <div class="space-y-1">
-                        <label class="text-xs text-slate-400 px-2">Your Vercel Token Endpoint URL</label>
-                        <input type="text" id="tokenEndpoint" placeholder="https://your-project.vercel.app/api/token" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
-                        <p class="text-xs text-slate-500 px-2 mt-1">This endpoint has your AssemblyAI API key on Vercel</p>
-                    </div>
-
                     <div class="space-y-1">
                         <label class="text-xs text-slate-400 px-2">xAI Grok Key (Optional)</label>
-                        <input type="password" id="grokKey" placeholder="xai-..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                        <input type="password" id="grokKey" placeholder="xai-..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
                     </div>
 
-                    <div class="pt-4 border-t border-slate-800 space-y-3">
-                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">Summary Style</h3>
-                        <select id="summaryTemplate" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500">
+                    <div>
+                        <select id="summaryTemplate" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
                             <option value="executive">Executive Summary & Action Items</option>
                             <option value="technical">Technical Decisions</option>
                             <option value="casual">Conversation Notes</option>
@@ -56,9 +47,9 @@
 
         <main class="flex-1 flex flex-col h-full bg-slate-900">
             
-            <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50">
+            <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6">
                 <div class="flex items-center gap-4">
-                    <button id="recordBtn" class="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-medium px-4 py-2 rounded-full transition-all">
+                    <button id="recordBtn" class="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-medium px-4 py-2 rounded-full">
                         <i data-lucide="circle" class="w-4 h-4" id="recordIcon"></i>
                         <span id="recordText">Start Session</span>
                     </button>
@@ -76,13 +67,12 @@
             </header>
 
             <div class="flex-1 flex overflow-hidden p-6 gap-6">
-                
                 <div class="flex-1 bg-slate-950 rounded-xl border border-slate-800 flex flex-col overflow-hidden">
                     <div class="px-4 py-3 bg-slate-900 border-b border-slate-800">
                         <span class="text-xs font-semibold uppercase text-slate-400">Live Transcript</span>
                     </div>
                     <div id="transcriptBody" class="flex-1 p-4 overflow-y-auto space-y-4 text-slate-300">
-                        <p class="text-slate-500 italic text-sm">Click Start Session, speak, and transcript appears here...</p>
+                        <p class="text-slate-500 italic text-sm">Click Start Session to begin live transcription...</p>
                     </div>
                 </div>
 
@@ -97,7 +87,6 @@
                         </div>
                     </div>
                 </div>
-
             </div>
         </main>
     </div>
@@ -112,7 +101,6 @@
         const aiBody = document.getElementById('aiBody');
         const downloadAudioBtn = document.getElementById('downloadAudioBtn');
         const processAiBtn = document.getElementById('processAiBtn');
-        const tokenEndpointInput = document.getElementById('tokenEndpoint');
         const grokKeyInput = document.getElementById('grokKey');
         const summaryTemplate = document.getElementById('summaryTemplate');
 
@@ -127,11 +115,7 @@
         let timerInterval = null;
         let secondsElapsed = 0;
 
-        // Load saved settings
-        if(localStorage.getItem('token_endpoint')) tokenEndpointInput.value = localStorage.getItem('token_endpoint');
         if(localStorage.getItem('grok_key')) grokKeyInput.value = localStorage.getItem('grok_key');
-        
-        tokenEndpointInput.addEventListener('input', (e) => localStorage.setItem('token_endpoint', e.target.value));
         grokKeyInput.addEventListener('input', (e) => localStorage.setItem('grok_key', e.target.value));
 
         lucide.createIcons();
@@ -163,52 +147,32 @@
         }
 
         async function startSession() {
-            const tokenEndpoint = tokenEndpointInput.value.trim();
-            
-            if (!tokenEndpoint) {
-                alert("Please enter your Vercel token endpoint URL.");
-                return;
-            }
-
             try {
                 wsStatus.textContent = "Getting token...";
                 wsStatus.className = "text-amber-400";
 
-                const response = await fetch(tokenEndpoint, { method: 'POST' });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const data = await response.json();
-                if (!data.token) throw new Error('No token returned');
+                // Get token from your own Vercel endpoint
+                const res = await fetch('/api/token', { method: 'POST' });
+                const data = await res.json();
+                
+                if (!data.token) throw new Error('No token received');
 
                 wsStatus.textContent = "Connecting...";
-                
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                rtcRecorder = new RecordRTC(stream, {
-                    type: 'audio',
-                    mimeType: 'audio/webm',
-                    recorderType: RecordRTC.StereoAudioRecorder,
-                    numberOfAudioChannels: 1,
-                    desiredSampRate: 16000
-                });
-                rtcRecorder.startRecording();
 
-                socket = new WebSocket(`wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${data.token}`);
+                const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${data.token}`;
+                socket = new WebSocket(wsUrl);
 
                 socket.onopen = () => {
                     wsStatus.textContent = "Connected";
                     wsStatus.className = "text-emerald-400";
                     transcriptBody.innerHTML = "";
                     fullTranscriptText = "";
-                    socket.send(JSON.stringify({
-                        session_termination_threshold: 700,
-                        disable_partial_transcripts: false,
-                        language_code: "en_us"
-                    }));
+                    socket.send(JSON.stringify({ session_termination_threshold: 700, disable_partial_transcripts: false, language_code: "en_us" }));
+                    startMicrophone();
                 };
 
                 socket.onmessage = (msg) => {
                     const data = JSON.parse(msg.data);
-                    
                     if (data.message_type === "PartialTranscript") {
                         document.querySelectorAll('.partial-text').forEach(p => p.remove());
                         if (data.text?.trim()) {
@@ -218,8 +182,7 @@
                             transcriptBody.appendChild(p);
                             transcriptBody.scrollTop = transcriptBody.scrollHeight;
                         }
-                    }
-                    else if (data.message_type === "FinalTranscript") {
+                    } else if (data.message_type === "FinalTranscript") {
                         document.querySelectorAll('.partial-text').forEach(p => p.remove());
                         if (data.text?.trim()) {
                             fullTranscriptText += (fullTranscriptText ? " " : "") + data.text;
@@ -233,7 +196,16 @@
                 };
 
                 socket.onerror = () => { wsStatus.textContent = "Error"; wsStatus.className = "text-rose-500"; };
-                socket.onclose = () => { wsStatus.textContent = "Disconnected"; wsStatus.className = "text-rose-400"; if (isRecording) stopSession(); };
+                socket.onclose = () => { wsStatus.textContent = "Disconnected"; if (isRecording) stopSession(); };
+
+            } catch (err) { alert(`Error: ${err.message}`); }
+        }
+
+        async function startMicrophone() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                rtcRecorder = new RecordRTC(stream, { type: 'audio', mimeType: 'audio/webm', recorderType: RecordRTC.StereoAudioRecorder, numberOfAudioChannels: 1, desiredSampRate: 16000 });
+                rtcRecorder.startRecording();
 
                 audioContext = new AudioContext({ sampleRate: 16000 });
                 const source = audioContext.createMediaStreamSource(stream);
@@ -256,10 +228,7 @@
                 lucide.createIcons();
                 startTimer();
 
-            } catch (err) {
-                alert(`Error: ${err.message}`);
-                wsStatus.textContent = "Disconnected";
-            }
+            } catch (err) { alert(`Microphone error: ${err.message}`); }
         }
 
         async function stopSession() {
@@ -293,7 +262,6 @@
                 setTimeout(() => URL.revokeObjectURL(url), 100);
             }
         };
-
         processAiBtn.onclick = async () => {
             const grokKey = grokKeyInput.value.trim();
             if (!grokKey) { alert("Add Grok API key"); return; }
@@ -302,27 +270,18 @@
             const template = summaryTemplate.value;
             let systemPrompt = "Format in clean Markdown.";
             if (template === 'executive') systemPrompt = "Executive summary + action items.";
-            else if (template === 'technical') systemPrompt = "Technical decisions & architecture.";
-            
+            else if (template === 'technical') systemPrompt = "Technical decisions.";
+
             aiBody.innerHTML = '<div class="text-slate-400 animate-pulse">Analyzing...</div>';
-            
             try {
                 const res = await fetch('https://api.x.ai/v1/chat/completions', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${grokKey}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'grok-beta',
-                        messages: [
-                            { role: 'system', content: systemPrompt },
-                            { role: 'user', content: `Transcript:\n\n${fullTranscriptText}` }
-                        ]
-                    })
+                    body: JSON.stringify({ model: 'grok-beta', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: `Transcript:\n\n${fullTranscriptText}` }] })
                 });
                 const data = await res.json();
                 aiBody.innerHTML = `<div class="text-slate-200 whitespace-pre-wrap">${data.choices?.[0]?.message?.content || 'No response'}</div>`;
-            } catch (err) {
-                aiBody.innerHTML = `<p class="text-rose-400">Error: ${err.message}</p>`;
-            }
+            } catch (err) { aiBody.innerHTML = `<p class="text-rose-400">Error: ${err.message}</p>`; }
         };
     </script>
 </body>
